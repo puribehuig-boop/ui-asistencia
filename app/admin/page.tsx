@@ -1,3 +1,7 @@
+import ExportCsvButton from '../../components/ExportCsvButton';
+
+export const dynamic = 'force-static';
+
 type SessionRow = {
   id: string;
   grupo: string;
@@ -43,13 +47,9 @@ export default function AdminPage() {
           </tbody>
         </table>
       </div>
-      <a
-        href="#"
-        onClick={(e) => { e.preventDefault(); alert('Exportar CSV (demo)'); }}
-        className="inline-block mt-4 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10"
-      >
-        Exportar CSV
-      </a>
+
+      <ExportCsvButton />
     </main>
   );
 }
+
