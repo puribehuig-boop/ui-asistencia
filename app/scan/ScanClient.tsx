@@ -1,94 +1,72 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 
-type Slot = {
-  roomId: string;
-  start: string; // "HH:MM"
-  end: string;   // "HH:MM"
-  subject: string;
-  group: string;
-};
-
-// 👇 Horarios de ejemplo para el demo (luego se leerán de BD)
-const schedule: Slot[] = [
-  { roomId: 'A-101', start: '08:00', end: '09:30', subject: 'Introducción a la Ingeniería', group: 'Grupo A' },
-  { roomId: 'A-101', start: '10:00', end: '11:30', subject: 'Cálculo I', group: 'Grupo A' },
-  { roomId: 'B-105', start: '09:30', end: '11:00', subject: 'Psicología', group: 'Grupo B' },
-  { roomId: 'C-302', start: '11:00', end: '12:30', subject: 'Derecho Civil', group: 'Grupo C' },
-];
-
-function parseTodayTime(hhmm: string) {
-  const [h, m] = hhmm.split(':').map(Number);
-  const d = new Date();
-  d.setHours(h, m, 0, 0);
-  return d;
-}
-
-function withinWindow(now: Date, start: Date, end: Date, toleranceMin = 15) {
-  const startTol = new Date(start.getTime() - toleranceMin * 60000);
-  const endTol = new Date(end.getTime() + toleranceMin * 60000);
-  return now >= startTol && now <= endTol;
-}
+type Resolution =
+  | { found: false; sessionId: string; roomId: string; tolerance: number; debug?: any }
+  | { found: true; sessionId: string; roomId: string; subject: string; group_name: string; horario: string; tolerance: number; debug?: any };
 
 export default function ScanClient() {
   const params = useSearchParams();
   const roomId = params.get('roomId') ?? 'A-101';
+  const debug = params.get('debug') === '1';
 
-  const resolution = useMemo(() => {
-    const now = new Date();
-    const candidates = schedule.filter(s => s.roomId === roomId);
-    const match = candidates.find(s => withinWindow(now, parseTodayTime(s.start), parseTodayTime(s.end)));
-    if (!match) return { found: false as const };
+  const [data, setData] = useState<Resolution | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
+  const apiUrl = useMemo(() => {
+    const q = new URLSearchParams({ roomId });
+    if (debug) q.set('debug', '1');
+    return `/api/schedule/resolve?${q.toString()}`;
+  }, [roomId, debug]);
 
-    const sessionId = `${roomId}-${yyyy}${mm}${dd}-${match.start.replace(':','')}`;
-    const horario = `${match.start}–${match.end}`;
+  useEffect(() => {
+    fetch(apiUrl)
+      .then(r => r.json())
+      .then(setData)
+      .catch(e => setErr(String(e)));
+  }, [apiUrl]);
 
-    return {
-      found: true as const,
-      sessionId,
-      subject: match.subject,
-      group: match.group,
-      horario,
-      roomId,
-      url: `/session-demo?sessionId=${encodeURIComponent(sessionId)}&roomId=${encodeURIComponent(roomId)}`,
-    };
-  }, [roomId]);
+  if (err) return <main className="p-6">Error al validar el salón: {err}</main>;
+  if (!data) return <main className="p-6">Validando salón…</main>;
 
-  if (!resolution.found) {
-    const fallbackUrl = `/session-demo?sessionId=${encodeURIComponent(`${roomId}-manual`)}&roomId=${encodeURIComponent(roomId)}`;
+  const debugBlock = !!data.debug && (
+    <details className="mt-4 text-xs opacity-80">
+      <summary>Ver debug</summary>
+      <pre className="whitespace-pre-wrap bg-black/30 p-3 rounded-lg border border-white/10 mt-2">
+{JSON.stringify(data.debug, null, 2)}
+      </pre>
+    </details>
+  );
+
+  if (data.found === false) {
+    const fallbackUrl = `/session-demo?sessionId=${encodeURIComponent(data.sessionId)}&roomId=${encodeURIComponent(roomId)}`;
     return (
       <main className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
         <h1 className="text-lg font-semibold">Salón: {roomId}</h1>
-        <p className="opacity-80">No hay sesión en curso (según horario de ejemplo).</p>
-        <a
-          className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10"
-          href={fallbackUrl}
-        >
+        <p className="opacity-80">No hay sesión en curso (tolerancia {data.tolerance} min).</p>
+        <a className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10" href={fallbackUrl}>
           Continuar en modo manual
         </a>
+        {debugBlock}
       </main>
     );
   }
 
+  const go = `/session-demo?sessionId=${encodeURIComponent(data.sessionId)}&roomId=${encodeURIComponent(roomId)}`;
   return (
     <main className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
-      <h1 className="text-lg font-semibold">Salón: {resolution.roomId}</h1>
+      <h1 className="text-lg font-semibold">Salón: {data.roomId}</h1>
       <div className="text-center">
-        <div className="text-base font-medium">{resolution.subject}</div>
-        <div className="text-sm opacity-80">{resolution.group} · {resolution.horario}</div>
+        <div className="text-base font-medium">{data.subject}</div>
+        <div className="text-sm opacity-80">{data.group_name} · {data.horario}</div>
+        <div className="text-xs opacity-60 mt-1">Tolerancia: {data.tolerance} min</div>
       </div>
-      <a
-        className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10"
-        href={resolution.url}
-      >
+      <a className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10" href={go}>
         Ir a la sesión
       </a>
+      {debugBlock}
     </main>
   );
 }
