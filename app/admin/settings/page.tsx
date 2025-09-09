@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 export default function AdminSettingsPage() {
   const [adminPass, setAdminPass] = useState('');
+  const [authed, setAuthed] = useState(false);
   const [tol, setTol] = useState<number | ''>('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -11,55 +12,53 @@ export default function AdminSettingsPage() {
   const [replaceAll, setReplaceAll] = useState(false);
 
   const fetchTol = async () => {
-    if (!adminPass) return;
     setLoading(true); setMsg(null);
     try {
       const r = await fetch('/api/admin/settings', { headers: { 'x-admin-password': adminPass } });
       if (!r.ok) {
-        setMsg('No autorizado o error al leer ajustes.');
+        setAuthed(false);
+        setMsg('❌ Contraseña incorrecta o no autorizado.');
+        setTol('');
       } else {
         const j = await r.json();
+        setAuthed(true);
         setTol(j.attendance_tolerance_min ?? '');
+        setMsg('✅ Acceso concedido.');
       }
     } catch (e: any) {
-      setMsg(String(e));
+      setAuthed(false);
+      setMsg('❌ Error de conexión.');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { /* no auto-fetch sin password */ }, []);
-
   const saveTol = async () => {
+    if (!authed) { setMsg('❌ Primero autentícate.'); return; }
     if (tol === '' || Number(tol) < 0 || Number(tol) > 240) {
-      setMsg('Valor inválido: usa 0 a 240 minutos.');
+      setMsg('❌ Valor inválido: usa 0 a 240 minutos.');
       return;
     }
     setLoading(true); setMsg(null);
     try {
       const r = await fetch('/api/admin/settings', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-password': adminPass
-        },
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPass },
         body: JSON.stringify({ attendance_tolerance_min: Number(tol) }),
       });
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.error || 'Error al guardar');
-      setMsg('Tolerancia guardada correctamente.');
+      setMsg('✅ Tolerancia guardada correctamente.');
     } catch (e: any) {
-      setMsg(e.message);
+      setMsg(`❌ ${e.message}`);
     } finally {
       setLoading(false);
     }
   };
 
   const importCsv = async () => {
-    if (!csvText.trim()) {
-      setMsg('Carga un CSV antes de importar.');
-      return;
-    }
+    if (!authed) { setMsg('❌ Primero autentícate.'); return; }
+    if (!csvText.trim()) { setMsg('Carga un CSV antes de importar.'); return; }
     setLoading(true); setMsg(null);
     try {
       const url = `/api/admin/schedule/import${replaceAll ? '?replace=1' : ''}`;
@@ -70,19 +69,15 @@ export default function AdminSettingsPage() {
       });
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.error || 'Error al importar');
-      setMsg(`Importación completa. Filas insertadas: ${j.inserted}${replaceAll ? ' (reemplazo total)' : ''}.`);
+      setMsg(`✅ Importación completa. Filas insertadas: ${j.inserted}${replaceAll ? ' (reemplazo total)' : ''}.`);
     } catch (e: any) {
-      setMsg(e.message);
+      setMsg(`❌ ${e.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const onFile = async (f?: File) => {
-    if (!f) return;
-    const text = await f.text();
-    setCsvText(text);
-  };
+  const onFile = async (f?: File) => { if (!f) return; setCsvText(await f.text()); };
 
   return (
     <main className="space-y-6">
@@ -102,14 +97,19 @@ export default function AdminSettingsPage() {
           <button
             onClick={fetchTol}
             className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10"
+            disabled={loading || !adminPass}
           >
             Conectar
           </button>
         </div>
-        {msg && <p className="text-xs mt-3 opacity-80">{msg}</p>}
+        {msg && (
+          <p className={`text-xs mt-3 ${authed ? 'text-green-300' : 'text-red-300'}`}>
+            {msg}
+          </p>
+        )}
       </section>
 
-      <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
+      <section className={`bg-white/5 border border-white/10 rounded-2xl p-6 ${authed ? '' : 'opacity-50 pointer-events-none'}`}>
         <h3 className="text-base font-medium mb-3">Tolerancia global (minutos)</h3>
         <div className="flex items-end gap-3">
           <input
@@ -124,27 +124,22 @@ export default function AdminSettingsPage() {
           <button
             onClick={saveTol}
             className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10"
-            disabled={loading || !adminPass}
+            disabled={loading || !authed}
           >
             Guardar
           </button>
         </div>
-        <p className="text-xs opacity-70 mt-2">Se aplica a la resolución de sesiones en <code>/scan?roomId=...</code>.</p>
+        <p className="text-xs opacity-70 mt-2">Se aplica al resolver sesiones en <code>/scan?roomId=...</code>.</p>
       </section>
 
-      <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
+      <section className={`bg-white/5 border border-white/10 rounded-2xl p-6 ${authed ? '' : 'opacity-50 pointer-events-none'}`}>
         <h3 className="text-base font-medium mb-3">Cargar horarios (CSV)</h3>
         <p className="text-xs opacity-70 mb-3">
           Columnas requeridas: <code>room_code, subject, group_name, weekday, start_time, end_time</code>.
-          <br />Ejemplo: <code>A-101, Cálculo I, Grupo A, 1, 08:00, 09:30</code>
+          Acepta comillas, <code>;</code> como separador, <code>HH:MM:SS</code>, <code>8:00</code> o <code>0800</code>.
         </p>
         <div className="flex flex-wrap items-center gap-3 mb-3">
-          <input
-            type="file"
-            accept=".csv,text/csv"
-            onChange={(e) => onFile(e.target.files?.[0] || undefined)}
-            className="block"
-          />
+          <input type="file" accept=".csv,text/csv" onChange={(e) => onFile(e.target.files?.[0] || undefined)} className="block" />
           <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" checked={replaceAll} onChange={(e) => setReplaceAll(e.target.checked)} />
             Reemplazar todo (borra la tabla antes de importar)
@@ -152,7 +147,7 @@ export default function AdminSettingsPage() {
           <button
             onClick={importCsv}
             className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10"
-            disabled={loading || !adminPass}
+            disabled={loading || !authed}
           >
             Importar
           </button>
@@ -168,3 +163,4 @@ export default function AdminSettingsPage() {
     </main>
   );
 }
+
