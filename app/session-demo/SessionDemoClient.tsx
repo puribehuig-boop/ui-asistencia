@@ -14,6 +14,8 @@ const alumnosBase: Alumno[] = [
 export default function SessionDemoClient() {
   const params = useSearchParams();
   const sessionId = params.get('sessionId') ?? 'demo-123';
+  const roomId = params.get('roomId') ?? 'A-101';
+
   const [estado, setEstado] = useState<'No iniciada'|'En curso'|'Finalizada'>('No iniciada');
   const [alumnos, setAlumnos] = useState<Alumno[]>(alumnosBase);
   const puedeIniciar = estado === 'No iniciada';
@@ -23,9 +25,9 @@ export default function SessionDemoClient() {
   const info = useMemo(() => ({
     materia: 'Introducción a la Ingeniería',
     grupo: 'Grupo A',
-    salon: 'A-101',
+    salon: roomId,
     horario: '08:00–09:30',
-  }), []);
+  }), [roomId]);
 
   const marcar = (id: string, status: Alumno['status']) => {
     setAlumnos(prev => prev.map(a => a.id === id ? { ...a, status } : a));
@@ -99,3 +101,4 @@ export default function SessionDemoClient() {
     </main>
   );
 }
+
