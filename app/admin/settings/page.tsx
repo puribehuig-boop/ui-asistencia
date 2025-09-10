@@ -1,9 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { supabase } from '../../../lib/supabaseClient';
 
 export default function AdminSettingsPage() {
   const [adminPass, setAdminPass] = useState('');
+  const [token, setToken] = useState<string | null>(null);
+  const [me, setMe] = useState<{email?: string; role?: string} | null>(null);
+
   const [authed, setAuthed] = useState(false);
   const [tol, setTol] = useState<number | ''>('');
   const [late, setLate] = useState<number | ''>('');
@@ -12,11 +16,31 @@ export default function AdminSettingsPage() {
   const [csvText, setCsvText] = useState<string>('');
   const [replaceAll, setReplaceAll] = useState(false);
 
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      const t = data.session?.access_token || null;
+      setToken(t);
+      if (t) {
+        const r = await fetch('/api/auth/me', { headers: { authorization: `Bearer ${t}` } });
+        const j = await r.json();
+        if (j?.loggedIn) setMe({ email: j.email, role: j.role });
+      }
+    })();
+  }, []);
+
+  const headers = () => {
+    const h: Record<string,string> = {};
+    if (token) h['authorization'] = `Bearer ${token}`;
+    else if (adminPass) h['x-admin-password'] = adminPass;
+    return h;
+  };
+
   const fetchTol = async () => {
     setLoading(true); setMsg(null);
     try {
-      const r = await fetch('/api/admin/settings', { headers: { 'x-admin-password': adminPass } });
-      if (!r.ok) { setAuthed(false); setMsg('❌ Contraseña incorrecta o no autorizado.'); setTol(''); setLate(''); }
+      const r = await fetch('/api/admin/settings', { headers: headers() });
+      if (!r.ok) { setAuthed(false); setMsg('❌ No autorizado.'); setTol(''); setLate(''); }
       else {
         const j = await r.json();
         setAuthed(true);
@@ -37,7 +61,7 @@ export default function AdminSettingsPage() {
     try {
       const r = await fetch('/api/admin/settings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPass },
+        headers: { 'Content-Type': 'application/json', ...headers() },
         body: JSON.stringify({ attendance_tolerance_min: t, late_threshold_min: l }),
       });
       const j = await r.json();
@@ -53,7 +77,7 @@ export default function AdminSettingsPage() {
     setLoading(true); setMsg(null);
     try {
       const url = `/api/admin/schedule/import${replaceAll ? '?replace=1' : ''}`;
-      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/csv', 'x-admin-password': adminPass }, body: csvText });
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/csv', ...headers() }, body: csvText });
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.error || 'Error al importar');
       setMsg(`✅ Importación completa. Filas: ${j.inserted}${replaceAll ? ' (reemplazo total)' : ''}.`);
@@ -68,11 +92,23 @@ export default function AdminSettingsPage() {
       <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
         <h2 className="text-lg font-semibold mb-3">Acceso administrador</h2>
         <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[220px]">
-            <label className="block text-sm mb-1 opacity-80">Contraseña de admin</label>
-            <input type="password" value={adminPass} onChange={(e) => setAdminPass(e.target.value)} placeholder="••••••" className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/10" />
-          </div>
-          <button onClick={fetchTol} className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10" disabled={loading || !adminPass}>Conectar</button>
+          {!token && (
+            <>
+              <div className="min-w-[220px]">
+                <label className="block text-sm mb-1 opacity-80">Contraseña admin (plan B)</label>
+                <input type="password" value={adminPass} onChange={(e) => setAdminPass(e.target.value)} placeholder="••••••" className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/10" />
+              </div>
+              <a href="/auth/login" className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10">Iniciar sesión</a>
+            </>
+          )}
+          {token && (
+            <div className="text-xs opacity-80">
+              Sesión: {me?.email} ({me?.role})
+            </div>
+          )}
+          <button onClick={fetchTol} className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10" disabled={loading || (!token && !adminPass)}>
+            Conectar
+          </button>
         </div>
         {msg && <p className={`text-xs mt-3 ${authed ? 'text-green-300' : 'text-red-300'}`}>{msg}</p>}
       </section>
@@ -90,12 +126,10 @@ export default function AdminSettingsPage() {
           </div>
           <button onClick={saveTol} className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10" disabled={loading || !authed}>Guardar</button>
         </div>
-        <p className="text-xs opacity-70 mt-2">Regla: ≤ tolerancia = a tiempo; &gt; tolerancia y ≤ tardanza = <b>Tarde</b>; &gt; tardanza = <b>Sesión sin registro</b>.</p>
       </section>
 
       <section className={`bg-white/5 border border-white/10 rounded-2xl p-6 ${authed ? '' : 'opacity-50 pointer-events-none'}`}>
         <h3 className="text-base font-medium mb-3">Cargar horarios (CSV)</h3>
-        <p className="text-xs opacity-70 mb-3">Columnas: <code>room_code, subject, group_name, weekday, start_time, end_time</code>. Acepta comillas, <code>;</code>, <code>HH:MM:SS</code>, <code>8:00</code> o <code>0800</code>.</p>
         <div className="flex flex-wrap items-center gap-3 mb-3">
           <input type="file" accept=".csv,text/csv" onChange={(e) => onFile(e.target.files?.[0] || undefined)} className="block" />
           <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={replaceAll} onChange={(e) => setReplaceAll(e.target.checked)} /> Reemplazar todo</label>
