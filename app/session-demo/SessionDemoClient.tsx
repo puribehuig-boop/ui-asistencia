@@ -7,11 +7,7 @@ type EstadoSesion = 'No iniciada' | 'En curso' | 'Finalizada';
 const ESTADOS_ALUMNO = ['Presente', 'Tarde', 'Ausente', 'Justificado'] as const;
 type EstadoAlumno = (typeof ESTADOS_ALUMNO)[number];
 
-type Alumno = {
-  id: string;
-  nombre: string;
-  status?: EstadoAlumno;
-};
+type Alumno = { id: string; nombre: string; status?: EstadoAlumno; };
 
 const alumnosBase: Alumno[] = [
   { id: 'A-01', nombre: 'Ana Torres' },
@@ -27,37 +23,71 @@ export default function SessionDemoClient() {
 
   const [estado, setEstado] = useState<EstadoSesion>('No iniciada');
   const [alumnos, setAlumnos] = useState<Alumno[]>(alumnosBase);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const puedeIniciar = estado === 'No iniciada';
-  const puedeMarcar = estado === 'En curso'; // Nota: "Justificado" será editable siempre (ver más abajo)
+  const puedeMarcar = estado === 'En curso'; // Justificado siempre editable
   const puedeTerminar = estado === 'En curso';
 
-  const info = useMemo(
-    () => ({
-      materia: 'Introducción a la Ingeniería',
-      grupo: 'Grupo A',
-      salon: roomId,
-      horario: '08:00–09:30',
-    }),
-    [roomId]
-  );
+  const info = useMemo(() => ({
+    materia: 'Introducción a la Ingeniería',
+    grupo: 'Grupo A',
+    salon: roomId,
+    horario: '08:00–09:30',
+  }), [roomId]);
 
   const marcar = (id: string, status: EstadoAlumno) => {
-    setAlumnos((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
+    setAlumnos(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+  };
+
+  const iniciarSesion = async () => {
+    setSaving(true); setMsg(null);
+    try {
+      const r = await fetch('/api/sessions/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, roomId })
+      });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || 'No se pudo iniciar sesión');
+      setEstado('En curso');
+      setMsg('✅ Sesión guardada (en curso).');
+    } catch (e: any) {
+      setMsg('❌ ' + (e?.message || 'Error iniciando sesión'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const terminarSesion = async () => {
+    setSaving(true); setMsg(null);
+    try {
+      const r = await fetch('/api/sessions/finish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId })
+      });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || 'No se pudo terminar sesión');
+      setEstado('Finalizada');
+      setMsg('✅ Sesión finalizada y guardada.');
+    } catch (e: any) {
+      setMsg('❌ ' + (e?.message || 'Error al terminar sesión'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const resumen = useMemo(() => {
     const base = { Presente: 0, Tarde: 0, Ausente: 0, Justificado: 0 } as Record<EstadoAlumno, number>;
-    for (const a of alumnos) {
-      if (a.status) base[a.status]++;
-    }
+    for (const a of alumnos) if (a.status) base[a.status]++;
     const total = alumnos.length;
     return { ...base, total };
   }, [alumnos]);
 
   return (
     <main className="space-y-6">
-      {/* Encabezado de sesión */}
       <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
         <div className="flex items-start justify-between gap-6">
           <div>
@@ -71,17 +101,11 @@ export default function SessionDemoClient() {
           </span>
         </div>
 
-        {/* Acciones de la sesión */}
         <div className="mt-5 flex flex-wrap gap-3">
           <button
-            disabled={!puedeIniciar}
-            onClick={() => setEstado('En curso')}
-            className={
-              'px-4 py-2 rounded-xl border ' +
-              (puedeIniciar
-                ? 'bg-white/10 hover:bg-white/20 border-white/10'
-                : 'bg-white/5 border-white/10 opacity-50 cursor-not-allowed')
-            }
+            disabled={!puedeIniciar || saving}
+            onClick={iniciarSesion}
+            className={"px-4 py-2 rounded-xl border " + (puedeIniciar && !saving ? "bg-white/10 hover:bg-white/20 border-white/10" : "bg-white/5 border-white/10 opacity-50 cursor-not-allowed")}
           >
             Iniciar clase
           </button>
@@ -89,31 +113,22 @@ export default function SessionDemoClient() {
           <button
             disabled={!puedeMarcar}
             onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
-            className={
-              'px-4 py-2 rounded-xl border ' +
-              (puedeMarcar
-                ? 'bg-white/10 hover:bg-white/20 border-white/10'
-                : 'bg-white/5 border-white/10 opacity-50 cursor-not-allowed')
-            }
+            className={"px-4 py-2 rounded-xl border " + (puedeMarcar ? "bg-white/10 hover:bg-white/20 border-white/10" : "bg-white/5 border-white/10 opacity-50 cursor-not-allowed")}
           >
             Tomar asistencia
           </button>
 
           <button
-            disabled={!puedeTerminar}
-            onClick={() => setEstado('Finalizada')}
-            className={
-              'px-4 py-2 rounded-xl border ' +
-              (puedeTerminar
-                ? 'bg-white/10 hover:bg-white/20 border-white/10'
-                : 'bg-white/5 border-white/10 opacity-50 cursor-not-allowed')
-            }
+            disabled={!puedeTerminar || saving}
+            onClick={terminarSesion}
+            className={"px-4 py-2 rounded-xl border " + (puedeTerminar && !saving ? "bg-white/10 hover:bg-white/20 border-white/10" : "bg-white/5 border-white/10 opacity-50 cursor-not-allowed")}
           >
             Terminar clase
           </button>
         </div>
 
-        {/* Resumen rápido */}
+        {msg && <p className="mt-3 text-xs">{msg}</p>}
+
         <div className="mt-4 text-xs opacity-80 flex flex-wrap gap-x-4 gap-y-1">
           <span>Total: {resumen.total}</span>
           <span>Presente: {resumen.Presente}</span>
@@ -122,50 +137,29 @@ export default function SessionDemoClient() {
           <span>Justificado: {resumen.Justificado}</span>
         </div>
 
-        <p className="mt-2 text-xs opacity-70">
-          Nota: <b>Justificado</b> puede editarse en cualquier momento, incluso después de finalizar la sesión.
-        </p>
+        <p className="mt-2 text-xs opacity-70">Nota: <b>Justificado</b> puede editarse en cualquier momento, incluso después de finalizar la sesión.</p>
       </section>
 
-      {/* Lista de alumnos */}
       <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
         <h3 className="text-base font-medium mb-3">Lista de alumnos</h3>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {alumnos.map((a) => (
-            <div
-              key={a.id}
-              className="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl p-3"
-            >
+          {alumnos.map(a => (
+            <div key={a.id} className="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl p-3">
               <div className="text-sm">
                 <div className="font-medium">{a.nombre}</div>
                 <div className="opacity-70 text-xs">{a.id}</div>
               </div>
-
               <div className="flex gap-2">
-                {ESTADOS_ALUMNO.map((s) => {
-                  // Regla: los estados normales solo cuando está "En curso".
-                  // "Justificado" es editable SIEMPRE (antes, durante y después).
+                {ESTADOS_ALUMNO.map(s => {
                   const editableSiempre = s === 'Justificado';
                   const disabled = !(estado === 'En curso' || editableSiempre);
-
                   return (
                     <button
                       key={s}
                       disabled={disabled}
                       onClick={() => marcar(a.id, s)}
-                      className={
-                        'px-3 py-1 text-xs rounded-lg border ' +
-                        (a.status === s ? 'bg-white/20' : 'bg-white/10 hover:bg-white/20') +
-                        (disabled ? ' opacity-50 cursor-not-allowed' : '')
-                      }
-                      title={
-                        editableSiempre
-                          ? 'Justificado se puede marcar en cualquier momento'
-                          : estado !== 'En curso'
-                          ? 'Solo editable durante la sesión'
-                          : ''
-                      }
+                      className={"px-3 py-1 text-xs rounded-lg border " + (a.status === s ? "bg-white/20" : "bg-white/10 hover:bg-white/20") + (disabled ? " opacity-50 cursor-not-allowed" : "")}
+                      title={editableSiempre ? 'Justificado se puede marcar en cualquier momento' : (estado !== 'En curso' ? 'Solo editable durante la sesión' : '')}
                     >
                       {s}
                     </button>
