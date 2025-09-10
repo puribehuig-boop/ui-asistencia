@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 type EstadoSesion = 'No iniciada' | 'En curso' | 'Finalizada';
 const ESTADOS_ALUMNO = ['Presente', 'Tarde', 'Ausente', 'Justificado'] as const;
@@ -25,6 +25,7 @@ export default function SessionDemoClient() {
   const [alumnos, setAlumnos] = useState<Alumno[]>(alumnosBase);
   const [msg, setMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loadingAtt, setLoadingAtt] = useState(true);
 
   const puedeIniciar = estado === 'No iniciada';
   const puedeMarcar = estado === 'En curso'; // Justificado siempre editable
@@ -37,16 +38,70 @@ export default function SessionDemoClient() {
     horario: '08:00–09:30',
   }), [roomId]);
 
-  const marcar = (id: string, status: EstadoAlumno) => {
+  // Cargar asistencias existentes de la BD al entrar
+  useEffect(() => {
+    let canceled = false;
+    const load = async () => {
+      setLoadingAtt(true);
+      try {
+        const r = await fetch(`/api/attendance/list?sessionId=${encodeURIComponent(sessionId)}`);
+        const j = await r.json();
+        if (canceled) return;
+        if (r.ok && j.ok && Array.isArray(j.items)) {
+          // Mapear statuses por student_id
+          const map = new Map<string, EstadoAlumno>();
+          j.items.forEach((it: any) => { if (it.student_id && it.status) map.set(String(it.student_id), it.status as EstadoAlumno); });
+          setAlumnos(prev => prev.map(a => map.has(a.id) ? { ...a, status: map.get(a.id) } : a));
+        }
+      } catch {
+        /* noop */
+      } finally {
+        if (!canceled) setLoadingAtt(false);
+      }
+    };
+    load();
+    return () => { canceled = true; };
+  }, [sessionId]);
+
+  const marcarLocal = (id: string, status: EstadoAlumno) => {
     setAlumnos(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+  };
+
+  const guardarAsistencia = async (alumno: Alumno, status: EstadoAlumno) => {
+    setMsg(null);
+    try {
+      const r = await fetch('/api/attendance/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          roomId,
+          studentId: alumno.id,
+          studentName: alumno.nombre,
+          status
+        })
+      });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || 'No se pudo guardar asistencia');
+      setMsg(`✅ ${alumno.nombre}: ${status}`);
+    } catch (e: any) {
+      setMsg('❌ ' + (e?.message || 'Error guardando asistencia'));
+    }
+  };
+
+  const marcar = async (id: string, status: EstadoAlumno) => {
+    const alumno = alumnos.find(a => a.id === id);
+    if (!alumno) return;
+    // Optimista
+    marcarLocal(id, status);
+    await guardarAsistencia(alumno, status);
   };
 
   const iniciarSesion = async () => {
     setSaving(true); setMsg(null);
     try {
       const r = await fetch('/api/sessions/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, roomId })
       });
       const j = await r.json();
@@ -64,8 +119,7 @@ export default function SessionDemoClient() {
     setSaving(true); setMsg(null);
     try {
       const r = await fetch('/api/sessions/finish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId })
       });
       const j = await r.json();
@@ -96,9 +150,7 @@ export default function SessionDemoClient() {
               {info.materia} · {info.grupo} · Salón {info.salon} · {info.horario}
             </p>
           </div>
-          <span className="text-xs px-2 py-1 rounded-lg bg-white/10 border border-white/10">
-            {estado}
-          </span>
+          <span className="text-xs px-2 py-1 rounded-lg bg-white/10 border border-white/10">{estado}</span>
         </div>
 
         <div className="mt-5 flex flex-wrap gap-3">
@@ -135,9 +187,12 @@ export default function SessionDemoClient() {
           <span>Tarde: {resumen.Tarde}</span>
           <span>Ausente: {resumen.Ausente}</span>
           <span>Justificado: {resumen.Justificado}</span>
+          {loadingAtt && <span>Cargando asistencias…</span>}
         </div>
 
-        <p className="mt-2 text-xs opacity-70">Nota: <b>Justificado</b> puede editarse en cualquier momento, incluso después de finalizar la sesión.</p>
+        <p className="mt-2 text-xs opacity-70">
+          Nota: <b>Justificado</b> puede editarse en cualquier momento, incluso después de finalizar la sesión.
+        </p>
       </section>
 
       <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
@@ -158,7 +213,11 @@ export default function SessionDemoClient() {
                       key={s}
                       disabled={disabled}
                       onClick={() => marcar(a.id, s)}
-                      className={"px-3 py-1 text-xs rounded-lg border " + (a.status === s ? "bg-white/20" : "bg-white/10 hover:bg-white/20") + (disabled ? " opacity-50 cursor-not-allowed" : "")}
+                      className={
+                        "px-3 py-1 text-xs rounded-lg border " +
+                        (a.status === s ? "bg-white/20" : "bg-white/10 hover:bg-white/20") +
+                        (disabled ? " opacity-50 cursor-not-allowed" : "")
+                      }
                       title={editableSiempre ? 'Justificado se puede marcar en cualquier momento' : (estado !== 'En curso' ? 'Solo editable durante la sesión' : '')}
                     >
                       {s}
