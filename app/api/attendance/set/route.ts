@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
+import { supabase } from '../../../../lib/supabaseClient';
 import { supabaseAdmin } from '../../../../lib/supabaseAdmin';
 
 const ALLOWED = ['Presente','Tarde','Ausente','Justificado'] as const;
 type Estado = typeof ALLOWED[number];
 
 function parseFromSessionCode(code: string) {
-  // <room>-YYYYMMDD-<HHMM|manual>
   const m = code.match(/-(\d{8})-(\d{4}|manual)$/);
   if (!m) return null;
-  const dateStr = m[1];
-  const startStr = m[2];
+  const dateStr = m[1]; const startStr = m[2];
   const room = code.slice(0, m.index!);
   return { room_code: room, dateStr, startStr };
 }
@@ -27,34 +26,33 @@ export async function POST(req: Request) {
     if (!student_id || !student_name) return NextResponse.json({ ok: false, error: 'missing_student' }, { status: 400 });
     if (!ALLOWED.includes(status)) return NextResponse.json({ ok: false, error: 'invalid_status' }, { status: 400 });
 
-    // Asegurar que exista la sesión (lazy create si hiciera falta)
-    const { data: existing } = await supabaseAdmin
-      .from('sessions')
-      .select('id')
-      .eq('session_code', session_code)
-      .maybeSingle();
+    // Quién es (si viene token)
+    let updated_by = 'anon';
+    const auth = req.headers.get('authorization') || '';
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    if (token) {
+      const { data: userRes } = await supabase.auth.getUser(token);
+      const user = userRes?.user;
+      if (user?.email) updated_by = user.email;
+    }
 
+    // Asegurar sesión
+    const { data: existing } = await supabaseAdmin.from('sessions').select('id').eq('session_code', session_code).maybeSingle();
     let session_id = existing?.id as number | undefined;
-
     if (!session_id) {
-      // Construir fecha desde session_code o usar hoy MX
       const parsed = parseFromSessionCode(session_code);
       const session_date = parsed?.dateStr
         ? `${parsed.dateStr.slice(0,4)}-${parsed.dateStr.slice(4,6)}-${parsed.dateStr.slice(6,8)}`
         : new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
-
       const room_code = roomId || parsed?.room_code || 'SIN-SALON';
-
       const { data: ins, error: insErr } = await supabaseAdmin
-        .from('sessions')
-        .insert({ session_code, room_code, session_date, status: 'not_started' })
-        .select('id')
-        .maybeSingle();
+        .from('sessions').insert({ session_code, room_code, session_date, status: 'not_started' })
+        .select('id').maybeSingle();
       if (insErr) return NextResponse.json({ ok: false, error: insErr.message }, { status: 500 });
       session_id = ins?.id;
     }
 
-    // Upsert de asistencia (clave única: session_id + student_id)
+    // Upsert asistencia
     const { error: upErr } = await supabaseAdmin
       .from('attendance')
       .upsert({
@@ -62,7 +60,7 @@ export async function POST(req: Request) {
         student_id,
         student_name,
         status,
-        updated_by: 'demo', // luego pondremos el docente autenticado
+        updated_by,
         updated_at: new Date().toISOString()
       }, { onConflict: 'session_id,student_id' });
 
