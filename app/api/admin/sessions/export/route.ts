@@ -1,15 +1,25 @@
 import { NextResponse } from 'next/server';
+import { supabase } from '../../../../../lib/supabaseClient';
 import { supabaseAdmin } from '../../../../../lib/supabaseAdmin';
 
-function checkAuth(req: Request) {
+async function isAdmin(req: Request) {
+  const auth = req.headers.get('authorization') || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (token) {
+    const { data: userRes } = await supabase.auth.getUser(token);
+    const user = userRes?.user;
+    if (user) {
+      const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('user_id', user.id).maybeSingle();
+      if (profile?.role === 'admin') return true;
+    }
+  }
   const pass = req.headers.get('x-admin-password') ?? '';
   return pass && pass === process.env.ADMIN_UI_PASSWORD;
 }
+
 function todayMX() {
-  const s = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit'
-  }).format(new Date());
-  return s; // YYYY-MM-DD
+  const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  return s;
 }
 function esc(s: any) {
   const v = (s ?? '').toString();
@@ -18,9 +28,7 @@ function esc(s: any) {
 }
 
 export async function GET(req: Request) {
-  if (!checkAuth(req)) {
-    return new NextResponse('unauthorized', { status: 401 });
-  }
+  if (!(await isAdmin(req))) return new NextResponse('unauthorized', { status: 401 });
 
   const url = new URL(req.url);
   const date = (url.searchParams.get('date') || todayMX()).trim();
@@ -28,7 +36,6 @@ export async function GET(req: Request) {
   const group = (url.searchParams.get('group') || '').trim();
   const status = (url.searchParams.get('status') || '').trim();
 
-  // 1) Traer sesiones del día (con filtros)
   let q = supabaseAdmin
     .from('sessions')
     .select('id, session_code, session_date, room_code, subject, group_name, start_planned, end_planned, status, arrival_status, arrival_delay_min, started_at, ended_at')
@@ -41,7 +48,6 @@ export async function GET(req: Request) {
   if (errSes) return new NextResponse('error: ' + errSes.message, { status: 500 });
 
   const ids = (sessions ?? []).map(s => s.id);
-  // Encabezado CSV
   const header = [
     'session_code','session_date','room_code','subject','group_name',
     'start_planned','end_planned','status','arrival_status','arrival_delay_min',
@@ -51,23 +57,15 @@ export async function GET(req: Request) {
 
   if (ids.length === 0) {
     const csv = header + '\n';
-    return new NextResponse(csv, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="asistencias_${date}.csv"`
-      }
-    });
+    return new NextResponse(csv, { status: 200, headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="asistencias_${date}.csv"` } });
   }
 
-  // 2) Traer asistencias de esas sesiones
   const { data: att, error: errAtt } = await supabaseAdmin
     .from('attendance')
     .select('session_id, student_id, student_name, status, updated_at, updated_by')
     .in('session_id', ids);
   if (errAtt) return new NextResponse('error: ' + errAtt.message, { status: 500 });
 
-  // 3) Armar CSV
   const bySession = new Map<number, any[]>();
   att?.forEach(a => {
     const arr = bySession.get(a.session_id) || [];
@@ -98,11 +96,5 @@ export async function GET(req: Request) {
   }
 
   const csv = lines.join('\n') + '\n';
-  return new NextResponse(csv, {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="asistencias_${date}.csv"`
-    }
-  });
+  return new NextResponse(csv, { status: 200, headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="asistencias_${date}.csv"` } });
 }
