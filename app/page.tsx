@@ -27,7 +27,11 @@ export default function Home() {
             >
               Imprimir QR del salón A-101
             </a>
-          
+
+            <a href="/admin/sessions" className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10">
+                Sesiones de hoy (admin)
+            </a>
+
             <a
               href="/admin/settings"
               className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10"
