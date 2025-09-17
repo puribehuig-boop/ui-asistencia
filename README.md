@@ -23,3 +23,6 @@ Prototipo listo para importar en **Vercel**. Incluye:
 - Conectar con base de datos (Supabase o Postgres) para guardar sesiones/asis.
 - Generar QR por sesión con URL firmada.
 - Autenticación de docente/admin.
+
+- (deploy trigger)
+
