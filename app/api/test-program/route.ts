@@ -4,12 +4,11 @@ const prisma = new PrismaClient();
 
 export async function GET() {
   try {
-    const created = await prisma.program.upsert({
-      where: { name: "Licenciatura en Derecho" },
-      update: {},
-      create: { name: "Licenciatura en Derecho" },
-    });
-    return NextResponse.json({ ok: true, created });
+    const name = "Licenciatura en Derecho";
+    const existing = await prisma.program.findFirst({ where: { name } });
+
+    const result = existing ?? (await prisma.program.create({ data: { name } }));
+    return NextResponse.json({ ok: true, created: result });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
   }
