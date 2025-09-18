@@ -9,6 +9,7 @@ export async function GET() {
       user: url.username,
       protocol: url.protocol,
       host: url.hostname,
+      query: url.search,
       port: url.port,
       db: url.pathname,
       hasQuery: url.search.length > 0,
