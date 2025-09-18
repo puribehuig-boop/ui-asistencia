@@ -1,3 +1,6 @@
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from "next/server";
 import { Client } from "pg";
 
@@ -5,7 +8,7 @@ export async function GET() {
   const cs = process.env.DATABASE_URL;
   if (!cs) return NextResponse.json({ ok:false, error:"No DATABASE_URL" }, { status:500 });
 
-  // Fuerza TLS en serverless: requiere SSL pero no verifica CA (diagnóstico)
+  // Fuerza TLS en serverless: requiere SSL pero no verifica CA (solo diagnóstico)
   const client = new Client({
     connectionString: cs,
     ssl: { require: true, rejectUnauthorized: false }
