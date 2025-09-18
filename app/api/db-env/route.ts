@@ -6,6 +6,7 @@ export async function GET() {
     const url = new URL(raw);
     return NextResponse.json({
       ok: true,
+      user: url.username,
       protocol: url.protocol,
       host: url.hostname,
       port: url.port,
