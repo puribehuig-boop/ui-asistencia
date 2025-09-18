@@ -5,12 +5,12 @@ export async function GET() {
   const cs = process.env.DATABASE_URL;
   if (!cs) return NextResponse.json({ ok:false, error:"No DATABASE_URL" }, { status:500 });
 
-  // Parseamos y forzamos SSL con no-verify (solo para diagnóstico)
-  const cfg = parse(cs);
-  // @ts-expect-error - pg types allow ssl object
-  cfg.ssl = { require: true, rejectUnauthorized: false };
-  
-  const client = new Client({ connectionString: cs, ssl: { rejectUnauthorized: false } });
+  // Fuerza TLS en serverless: requiere SSL pero no verifica CA (diagnóstico)
+  const client = new Client({
+    connectionString: cs,
+    ssl: { require: true, rejectUnauthorized: false }
+  });
+
   try {
     await client.connect();
     const r = await client.query("SELECT now() as now");
