@@ -1,6 +1,6 @@
 "use client";
 import { useEffect } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browserClient";
 
 export default function LogoutPage() {
   useEffect(() => {
