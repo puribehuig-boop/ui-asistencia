@@ -44,40 +44,58 @@ export default function LoginPage() {
   }
 
   async function verifyOtp(e: React.FormEvent) {
-    e.preventDefault();
-    setErr(null);
-    setMsg(null);
+  e.preventDefault();
+  setErr(null);
+  setMsg(null);
 
-    const cleanEmail = email.trim();
-    const token = code.trim();
+  const cleanEmail = email.trim();
+  const token = code.trim();
 
-    if (!cleanEmail || !token) return;
-    // (Opcional) Validación mínima: 6 dígitos
-    if (!/^\d{6}$/.test(token)) {
-      setErr("Ingresa el código de 6 dígitos tal como llegó en tu correo.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const supabase = createSupabaseBrowserClient();
-
-      // Verificamos el OTP (código de 6 dígitos)
-      const { error } = await supabase.auth.verifyOtp({
-        email: cleanEmail,
-        token,
-        type: "email", // verificamos OTP por correo
-      });
-      if (error) throw error;
-
-      // Sesión creada → redirige al admin (el guard se encarga del rol)
-      window.location.href = "/admin";
-    } catch (e: any) {
-      setErr(e.message || String(e));
-    } finally {
-      setLoading(false);
-    }
+  if (!cleanEmail || !token) return;
+  if (!/^\d{6}$/.test(token)) {
+    setErr("Ingresa el código de 6 dígitos tal como llegó en tu correo.");
+    return;
   }
+
+  setLoading(true);
+  try {
+    const supabase = createSupabaseBrowserClient();
+
+    // Verificamos OTP y obtenemos la sesión en el CLIENTE
+    const { data, error } = await supabase.auth.verifyOtp({
+      email: cleanEmail,
+      token,
+      type: "email", // OTP por correo
+    });
+    if (error) throw error;
+
+    // Asegúrate de tener tokens para sincronizar con el servidor
+    const access_token = data.session?.access_token;
+    const refresh_token = data.session?.refresh_token;
+
+    if (!access_token || !refresh_token) {
+      throw new Error("No se recibió sesión válida tras verificar el código.");
+    }
+
+    // 🔸 Sincroniza la sesión al SERVIDOR (cookies del lado server)
+    const res = await fetch("/auth/session", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ access_token, refresh_token }),
+      credentials: "include",
+    });
+    const j = await res.json();
+    if (!res.ok || !j.ok) throw new Error(j.error || "No se pudo sincronizar la sesión en el servidor");
+
+    // Listo: ahora el guard del Admin verá la sesión
+    window.location.href = "/admin";
+  } catch (e: any) {
+    setErr(e.message || String(e));
+  } finally {
+    setLoading(false);
+  }
+}
+
 
   return (
     <main className="max-w-md mx-auto p-6">
