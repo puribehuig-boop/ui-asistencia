@@ -188,6 +188,8 @@ export default function ProgramsPage() {
                     >
                       Borrar
                     </button>
+                      <a className="underline underline-offset-2"
+                       href={`/admin/programs/${p.id}/asignar`}>Asignar materias</a>
                   </>
                 )}
               </td>
