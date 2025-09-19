@@ -1,5 +1,5 @@
 // app/admin/layout.tsx
-import { createSupabaseServerClient } from "@/lib/supabase/serverClient";
+import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 
