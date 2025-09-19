@@ -23,15 +23,16 @@ model Subject {
 }
 
 model ProgramSubject {
-  id         Int     @id @default(autoincrement())
-  programId  Int
-  subjectId  Int
-  term       Int
+  programId Int
+  subjectId Int
+  term      Int
 
-  program    Program @relation(fields: [programId], references: [id])
-  subject    Subject @relation(fields: [subjectId], references: [id])
+  program   Program @relation(fields: [programId], references: [id])
+  subject   Subject @relation(fields: [subjectId], references: [id])
 
-  @@unique([programId, subjectId, term])
+  @@id([programId, subjectId, term])  
+  @@index([programId])
+  @@index([subjectId])
 }
 
 model Term {
@@ -48,6 +49,7 @@ model Group {
   termId      Int
   term        Term         @relation(fields: [termId], references: [id])
   enrollments Enrollment[]
+  createdAt DateTime @default(now())
 }
 
 model StudentProfile {
