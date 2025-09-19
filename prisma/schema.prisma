@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Program {
+  id        Int              @id @default(autoincrement())
+  name      String           @unique
+  subjects  ProgramSubject[]
+  createdAt DateTime         @default(now())
+}
+
+model Subject {
+  id        Int              @id @default(autoincrement())
+  code      String           @unique
+  name      String
+  programs  ProgramSubject[]
+  createdAt DateTime         @default(now())
+}
+
+model ProgramSubject {
+  id         Int     @id @default(autoincrement())
+  programId  Int
+  subjectId  Int
+  term       Int
+
+  program    Program @relation(fields: [programId], references: [id])
+  subject    Subject @relation(fields: [subjectId], references: [id])
+
+  @@unique([programId, subjectId, term])
+}
+
+model Term {
+  id        Int      @id @default(autoincrement())
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  groups    Group[]
+}
+
+model Group {
+  id          Int          @id @default(autoincrement())
+  code        String       @unique
+  termId      Int
+  term        Term         @relation(fields: [termId], references: [id])
+  enrollments Enrollment[]
+}
+
+model StudentProfile {
+  id          Int          @id @default(autoincrement())
+  userId      String       @unique
+  fullName    String
+  curp        String?
+  phone       String?
+  address     String?
+  enrollments Enrollment[]
+}
+
+model Enrollment {
+  id         Int            @id @default(autoincrement())
+  studentId  Int
+  groupId    Int
+  student    StudentProfile @relation(fields: [studentId], references: [id])
+  group      Group          @relation(fields: [groupId], references: [id])
+
+  @@unique([studentId, groupId])
+}
