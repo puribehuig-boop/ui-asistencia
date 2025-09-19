@@ -3,52 +3,71 @@ import { createSupabaseServerClient } from "@/lib/supabase/serverClient";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";     // evita cachear el guard
+export const dynamic = "force-dynamic"; // el guard no debe cachearse
 export const runtime = "nodejs";
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  // 1) Leer sesión desde cookies (lado servidor)
   const supabase = createSupabaseServerClient();
-  const { data } = await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getUser();
 
-  if (!data.user) {
-    // No autenticado → login
+  // No autenticado → a /login
+  if (error || !data?.user) {
     redirect("/login");
   }
 
-  // Lee el rol desde la tabla "User" (creada por SQL) usando query raw
-type DbUser = { id: string; email: string | null; fullName: string | null; role: string };
+  // 2) Consultar rol en public.profiles (tu tabla)
+  type Profile = { user_id: string; email: string | null; role: "admin" | "docente" };
 
-const rows = await prisma.$queryRaw<DbUser[]>`
-  SELECT id, email, "fullName", role
-  FROM "User"
-  WHERE id = ${data.user.id}
-  LIMIT 1
-`;
-const u = rows[0] ?? null;
+  const rows = await prisma.$queryRaw<Profile[]>`
+    SELECT user_id, email, role
+    FROM public.profiles
+    WHERE user_id = ${data.user.id}
+    LIMIT 1
+  `;
+  const profile = rows[0] ?? null;
 
-
-  if (!u || u.role !== "admin") {
-    // No es admin → 403 simple
+  // Si no hay perfil o no es admin → 403 simple
+  if (!profile || profile.role !== "admin") {
     return (
       <main className="max-w-xl mx-auto p-6">
         <h1 className="text-xl font-semibold mb-3">Acceso restringido</h1>
         <p>No cuentas con permisos para ver esta sección.</p>
+        <p className="mt-2 text-sm opacity-70">
+          Usuario: {data.user.email ?? data.user.id}
+        </p>
       </main>
     );
   }
 
-  // Si pasa el guard, renderiza el layout y menú
+  // 3) Render normal del panel admin
   return (
     <div className="max-w-5xl mx-auto p-6">
       <header className="mb-6">
         <h1 className="text-2xl font-semibold">Panel Admin</h1>
         <nav className="flex gap-4 mt-3 text-sm">
-          <a href="/admin" className="underline-offset-4 hover:underline">Inicio</a>
-          <a href="/admin/programs" className="underline-offset-4 hover:underline">Programas</a>
-          <a href="/admin/subjects" className="underline-offset-4 hover:underline">Materias</a>
-          <a href="/admin/terms" className="underline-offset-4 hover:underline">Periodos</a>
-          <a href="/admin/groups" className="underline-offset-4 hover:underline">Grupos</a>
-          <a href="/logout" className="underline-offset-4 hover:underline">Salir</a>
+          <a href="/admin" className="underline-offset-4 hover:underline">
+            Inicio
+          </a>
+          <a href="/admin/programs" className="underline-offset-4 hover:underline">
+            Programas
+          </a>
+          <a href="/admin/subjects" className="underline-offset-4 hover:underline">
+            Materias
+          </a>
+          <a href="/admin/terms" className="underline-offset-4 hover:underline">
+            Periodos
+          </a>
+          <a href="/admin/groups" className="underline-offset-4 hover:underline">
+            Grupos
+          </a>
+          <a href="/logout" className="underline-offset-4 hover:underline">
+            Salir
+          </a>
         </nav>
       </header>
       {children}
