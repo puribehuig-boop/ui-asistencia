@@ -38,6 +38,7 @@ export default function GroupsPage() {
   async function create(e: React.FormEvent) {
     e.preventDefault();
     if (!code.trim() || !termId) return;
+    if (!confirm(`Estás a punto de agregar el grupo "${code}" en el periodo "${termName}". ¿Continuar?`)) return;
     setLoading(true);
     setErr(null);
     try {
@@ -80,13 +81,13 @@ export default function GroupsPage() {
 
       <form onSubmit={create} className="flex flex-wrap gap-2 mb-4">
         <input
-          className="border rounded px-2 py-1"
+          className="border rounded px-2 py-1 text-black"
           value={code}
           onChange={(e) => setCode(e.target.value)}
           placeholder="Código del grupo (p.ej. ADM-1A)"
         />
         <select
-          className="border rounded px-2 py-1"
+          className="border rounded px-2 py-1 text-black"
           value={termId as any}
           onChange={(e) =>
             setTermId(e.target.value ? Number(e.target.value) : "")
