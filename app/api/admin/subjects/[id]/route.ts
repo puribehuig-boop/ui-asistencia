@@ -6,7 +6,7 @@ export async function DELETE(_: Request, ctx: { params: { id: string } }) {
   try {
     const id = Number(ctx.params.id);
     if (!Number.isFinite(id)) return fail("id inválido", 400);
-    await prisma.program.delete({ where: { id } });
+    await prisma.subject.delete({ where: { id } });
     return ok({ deleted: id });
   } catch (e) { return fail(e); }
 }
