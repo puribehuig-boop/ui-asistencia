@@ -36,28 +36,36 @@ export default function GroupsPage() {
   }, []);
 
   async function create(e: React.FormEvent) {
-    e.preventDefault();
-    if (!code.trim() || !termId) return;
-    if (!confirm(`Estás a punto de agregar el grupo "${code}" en el periodo "${termName}". ¿Continuar?`)) return;
-    setLoading(true);
-    setErr(null);
-    try {
-      const r = await fetch("/api/admin/groups", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code, termId: Number(termId) }),
-      });
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error);
-      setCode("");
-      setTermId("");
-      await load();
-    } catch (e: any) {
-      setErr(e.message || String(e));
-    } finally {
-      setLoading(false);
-    }
+  e.preventDefault();
+  if (!code.trim() || !termId) return;
+
+  // Calcula el nombre del periodo seleccionado ANTES del confirm
+  const selectedTermId = Number(termId);
+  const term = terms.find(t => t.id === selectedTermId);
+  const termName = term?.name ?? String(selectedTermId);
+
+  // Confirmación
+  if (!confirm(`Estás a punto de agregar el grupo "${code}" en el periodo "${termName}". ¿Continuar?`)) return;
+
+  setLoading(true);
+  setErr(null);
+  try {
+    const r = await fetch("/api/admin/groups", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code, termId: selectedTermId }),
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error);
+    setCode("");
+    setTermId("");
+    await load();
+  } catch (e: any) {
+    setErr(e.message || String(e));
+  } finally {
+    setLoading(false);
   }
+}
 
   async function remove(id: number) {
     if (!confirm(`¿Borrar grupo #${id}?`)) return;
