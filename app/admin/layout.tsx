@@ -15,8 +15,17 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect("/login");
   }
 
-  // Busca rol en tu DB (tabla "User") usando Prisma
-  const u = await prisma.user.findUnique({ where: { id: data.user.id } });
+  // Lee el rol desde la tabla "User" (creada por SQL) usando query raw
+type DbUser = { id: string; email: string | null; fullName: string | null; role: string };
+
+const rows = await prisma.$queryRaw<DbUser[]>`
+  SELECT id, email, "fullName", role
+  FROM "User"
+  WHERE id = ${data.user.id}
+  LIMIT 1
+`;
+const u = rows[0] ?? null;
+
 
   if (!u || u.role !== "admin") {
     // No es admin → 403 simple
