@@ -5,8 +5,6 @@ export const fetchCache = "force-no-store";
 
 import ExportCsvButton from '../../components/ExportCsvButton';
 
-export const dynamic = 'force-static';
-
 type SessionRow = {
   id: string;
   grupo: string;
