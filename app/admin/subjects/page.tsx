@@ -17,6 +17,7 @@ export default function SubjectsPage(){
 
   async function create(e:React.FormEvent){ e.preventDefault();
     if(!code.trim()||!name.trim()) return;
+    if (!confirm(`Estás a punto de agregar la materia "${name}" (código ${code}). ¿Continuar?`)) return;                                       
     setLoading(true); setErr(null);
     try{
       const r=await fetch("/api/admin/subjects",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({code,name})});
@@ -35,8 +36,8 @@ export default function SubjectsPage(){
   return (<div>
     <h2 className="text-lg font-semibold mb-3">Materias</h2>
     <form onSubmit={create} className="flex gap-2 mb-4">
-      <input className="border rounded px-2 py-1" value={code} onChange={e=>setCode(e.target.value)} placeholder="Código (único)"/>
-      <input className="border rounded px-2 py-1 flex-1" value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre"/>
+      <input className="border rounded px-2 py-1 text-black" value={code} onChange={e=>setCode(e.target.value)} placeholder="Código (único)"/>
+      <input className="border rounded px-2 py-1 flex-1 text-black" value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre"/>
       <button className="border rounded px-3 py-1" disabled={loading}>Guardar</button>
     </form>
     {err && <p className="text-red-600">Error: {err}</p>}
