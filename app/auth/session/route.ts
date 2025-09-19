@@ -1,6 +1,7 @@
 // app/auth/session/route.ts
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/serverClient";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
 
 export async function POST(req: Request) {
   try {
@@ -10,19 +11,39 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "missing tokens" }, { status: 400 });
     }
 
-    const supabase = createSupabaseServerClient();
+    // Prepara la respuesta sobre la cual vamos a ESCRIBIR cookies
+    const res = NextResponse.json({ ok: true });
 
-    // Establece la sesión en el servidor (esto dispara el set-cookie del helper SSR)
+    // Lee cookies de la request y escribe en la response
+    const cookieStore = cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value;
+          },
+          set(name: string, value: string, options: any) {
+            res.cookies.set(name, value, options as any);
+          },
+          remove(name: string, options: any) {
+            res.cookies.set(name, "", { ...(options as any), maxAge: 0 });
+          },
+        },
+      }
+    );
+
     const { error } = await supabase.auth.setSession({
       access_token,
       refresh_token,
     });
-
     if (error) {
       return NextResponse.json({ ok: false, error: String(error) }, { status: 401 });
     }
 
-    return NextResponse.json({ ok: true });
+    // 👈 Muy importante: devolvemos 'res' (la que lleva Set-Cookie)
+    return res;
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
   }
