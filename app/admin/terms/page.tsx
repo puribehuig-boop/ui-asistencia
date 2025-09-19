@@ -36,6 +36,7 @@ export default function TermsPage() {
   async function create(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || !startDate || !endDate) return;
+    if (!confirm(`Estás a punto de agregar el periodo "${name}" del ${startDate} al ${endDate}. ¿Continuar?`)) return;
     setLoading(true);
     setErr(null);
     try {
@@ -79,19 +80,19 @@ export default function TermsPage() {
 
       <form onSubmit={create} className="flex flex-wrap gap-2 mb-4">
         <input
-          className="border rounded px-2 py-1 grow"
+          className="border rounded px-2 py-1 grow text-black"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Nombre del periodo (p.ej. Ene-Jun 2026)"
         />
         <input
-          className="border rounded px-2 py-1"
+          className="border rounded px-2 py-1 text-black"
           type="date"
           value={startDate}
           onChange={(e) => setStart(e.target.value)}
         />
         <input
-          className="border rounded px-2 py-1"
+          className="border rounded px-2 py-1 text-black"
           type="date"
           value={endDate}
           onChange={(e) => setEnd(e.target.value)}
