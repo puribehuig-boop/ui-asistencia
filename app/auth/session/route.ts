@@ -11,10 +11,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "missing tokens" }, { status: 400 });
     }
 
-    // Prepara la respuesta sobre la cual vamos a ESCRIBIR cookies
+    // Preparamos la respuesta donde vamos a ESCRIBIR las cookies de sesión
     const res = NextResponse.json({ ok: true });
 
-    // Lee cookies de la request y escribe en la response
+    // Creamos un Supabase server client con adaptadores de cookies
     const cookieStore = cookies();
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,6 +25,7 @@ export async function POST(req: Request) {
             return cookieStore.get(name)?.value;
           },
           set(name: string, value: string, options: any) {
+            // Escribimos en la respuesta (Set-Cookie)
             res.cookies.set(name, value, options as any);
           },
           remove(name: string, options: any) {
@@ -34,15 +35,17 @@ export async function POST(req: Request) {
       }
     );
 
+    // Establece la sesión del lado servidor (esto “imprime” las cookies en 'res')
     const { error } = await supabase.auth.setSession({
       access_token,
       refresh_token,
     });
+
     if (error) {
       return NextResponse.json({ ok: false, error: String(error) }, { status: 401 });
     }
 
-    // 👈 Muy importante: devolvemos 'res' (la que lleva Set-Cookie)
+    // 👈 MUY IMPORTANTE: devolver 'res' (la que lleva Set-Cookie)
     return res;
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
