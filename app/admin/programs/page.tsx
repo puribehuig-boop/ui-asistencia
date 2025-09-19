@@ -22,6 +22,7 @@ export default function ProgramsPage() {
   async function create(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
+    if (!confirm(`Estás a punto de agregar el programa "${name}". ¿Continuar?`)) return;
     setLoading(true); setErr(null);
     try {
       const r = await fetch("/api/admin/programs", {
@@ -50,7 +51,7 @@ export default function ProgramsPage() {
     <div>
       <h2 className="text-lg font-semibold mb-3">Programas</h2>
       <form onSubmit={create} className="flex gap-2 mb-4">
-        <input className="border rounded px-2 py-1 flex-1"
+        <input className="border rounded px-2 py-1 flex-1 text-black"
           value={name} onChange={(e)=>setName(e.target.value)} placeholder="Nombre del programa" />
         <button className="border rounded px-3 py-1" disabled={loading}>Guardar</button>
       </form>
