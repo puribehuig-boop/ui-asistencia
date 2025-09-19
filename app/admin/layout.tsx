@@ -3,7 +3,6 @@ import { createSupabaseServerClient } from "@/lib/supabase/serverClient";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 
-// ⚠️ Fuerza ejecución en servidor por request
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,47 +14,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase.auth.getUser();
 
-  const ADMIN_DEBUG = process.env.ADMIN_DEBUG === "1";
-
-  // ---- DIAGNÓSTICO: muestra lo que ve el layout, sin redirigir ----
-  if (ADMIN_DEBUG) {
-    let profile: Profile | null = null;
-    if (data?.user) {
-      const rows = await prisma.$queryRaw<Profile[]>`
-        SELECT user_id, email, role
-        FROM public.profiles
-        WHERE user_id = ${data.user.id}
-        LIMIT 1
-      `;
-      profile = rows[0] ?? null;
-    }
-
-    return (
-      <main className="max-w-3xl mx-auto p-6">
-        <h1 className="text-xl font-semibold mb-3">Admin Debug (layout)</h1>
-        <pre className="text-xs p-3 bg-black/5 rounded mb-4">
-{JSON.stringify(
-  { hasUser: !!data?.user, user: data?.user ?? null, error: error?.message ?? null, profile },
-  null,
-  2
-)}
-        </pre>
-        <p className="mb-2 text-sm">
-          Si <b>hasUser</b> es <code>true</code> y <b>profile.role</b> es <code>admin</code>,
-          el guard debería permitir acceso.
-        </p>
-        <nav className="flex gap-4 text-sm underline underline-offset-4">
-          <a href="/api/auth/me">/api/auth/me</a>
-          <a href="/admin">/admin (este mismo layout)</a>
-          <a href="/logout">/logout</a>
-        </nav>
-        <div className="mt-6 border-t border-white/10 pt-6">{children}</div>
-      </main>
-    );
-  }
-  // -----------------------------------------------------------------
-
-  // Guard real (cuando ADMIN_DEBUG !== '1')
   if (error || !data?.user) {
     redirect("/login");
   }
@@ -73,7 +31,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <main className="max-w-xl mx-auto p-6">
         <h1 className="text-xl font-semibold mb-3">Acceso restringido</h1>
         <p>No cuentas con permisos para ver esta sección.</p>
-        <p className="mt-2 text-sm opacity-70">Usuario: {data.user.email ?? data.user.id}</p>
+        <p className="mt-2 text-sm opacity-70">
+          Usuario: {data.user.email ?? data.user.id}
+        </p>
       </main>
     );
   }
